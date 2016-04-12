@@ -33,7 +33,8 @@ window::window(int x_size, int y_size, int scale):
     sdl_renderer = SDL_CreateRenderer(
         sdl_win,
         -1,
-        (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
+        0 // Renderer flags. With 0 SDL should use acceleration when
+          // available and fall back to software rendering otherwise.
     );
 
     if (!sdl_renderer)
