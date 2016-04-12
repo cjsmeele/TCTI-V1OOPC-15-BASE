@@ -19,5 +19,5 @@ int main(int argc, char **argv){
    circle ball( w, 70, 30, 20 );
    ball.print();
    
-   return 0;
+   w.mainloop();
 }

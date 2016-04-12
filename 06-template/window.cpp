@@ -1,126 +1,107 @@
-// This file implements the window functionality in an ugly way.
-// don't use it as an example for your own code.
+// window.cpp, modified by Chris Smeele to use SDL as a graphics
+// backend for portability.
 
 #include "window.hpp"
 #include <iostream>
+#include <stdexcept>
 
-/* This is where all the input to a window goes to */
-LRESULT CALLBACK WndProc(
-   HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam
-) {
-	switch(Message) {
-		
-		/* trap the WM_CLOSE => tell the window to close */
-		case WM_CLOSE: {
-			DestroyWindow(hwnd);
-			break;
-		}
-		
-		/* Upon destruction, tell the main thread to stop */
-		case WM_DESTROY: {
-			PostQuitMessage(0);
-			break;
-		}
-		
-		/* All other messages are processed using default procedures */
-		default:
-			return DefWindowProc(hwnd, Message, wParam, lParam);
-	}
-	return 0;
+static const int COLOR_BG[3] = { 0x05, 0x05, 0x05 };
+static const int COLOR_FG[3] = { 0xa0, 0xff, 0xff };
+
+window::window(int x_size, int y_size, int scale):
+    x_size(x_size), y_size(y_size), scale(scale), pixels(y_size) {
+
+    // Initialize pixel grid.
+    for (auto &row : pixels)
+        row.resize(x_size, false);
+
+    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        throw std::runtime_error(std::string("SDL Init error: ") + SDL_GetError());
+
+    sdl_win = SDL_CreateWindow(
+        "LCD Window",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        x_size * scale,
+        y_size * scale,
+        SDL_WINDOW_SHOWN
+    );
+
+    if (!sdl_win)
+        throw std::runtime_error(std::string("SDL CreateWindow error: ") + SDL_GetError());
+
+    sdl_renderer = SDL_CreateRenderer(
+        sdl_win,
+        -1,
+        (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)
+    );
+
+    if (!sdl_renderer)
+        throw std::runtime_error(std::string("SDL_CreateRenderer error: ") + SDL_GetError());
 }
 
-void winloop(){
-   for(;;){ 
-   MSG Msg; 
-	   BOOL r = PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE );
-      if( r == -1 ){
-         // exit( 0 );
-      } else if( r > 0) {
-		   TranslateMessage(&Msg); /* Translate key codes to chars if present */
-		   DispatchMessage(&Msg); /* Send it to WndProc */
-	   }   
-   }   
-}
-
-// derived by trial-and-error :(
-#define X_MARGIN 20
-#define Y_MARGIN 42
-
-window::window( int x_size, int y_size, int scale ):
-   x_size( x_size ), y_size( y_size), scale( scale )
-{
-   
-   HINSTANCE hInstance;
-   WNDCLASSEX wc; /* A properties struct of our window */
-   HWND hwnd; 
-
-	/* zero out the struct and set the stuff we want to modify */
-	memset(&wc,0,sizeof(wc));
-	wc.cbSize		  = sizeof(WNDCLASSEX);
-	wc.lpfnWndProc = WndProc; /* where we will send messages to */
-	wc.hInstance	  = hInstance;
-	wc.hCursor		  = LoadCursor(NULL, IDC_ARROW);
-	
-	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-	wc.lpszClassName = "WindowClass";
-	wc.hIcon		 = LoadIcon(NULL, IDI_APPLICATION); 
-	wc.hIconSm		 = LoadIcon(NULL, IDI_APPLICATION);
-
-	if(!RegisterClassEx(&wc)) {
-		MessageBox( 
-          NULL, 
-         "Window Registration Failed!",
-         "Error!",
-         MB_ICONEXCLAMATION|MB_OK 
-      );
-		for(;;);
-	}
-
-	hwnd = CreateWindowEx(
-	    WS_EX_CLIENTEDGE,
-		"WindowClass",
-		"LCD Window",
-		WS_VISIBLE | WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, /* x */
-		CW_USEDEFAULT, /* y */
-		scale * x_size + X_MARGIN, /* width */
-		scale * y_size + Y_MARGIN, /* height */
-		NULL,NULL,hInstance,NULL);
-
-	if(hwnd == NULL) {
-		MessageBox( 
-          NULL, 
-         "Window Creation Failed!",
-         "Error!",
-         MB_ICONEXCLAMATION|MB_OK 
-      );
-		for(;;);
-	}
-	
-   hdc = GetDC(hwnd);
-   
-   atexit ( winloop );
-}
-
-void print_pixel( HDC hdc, int x, int y, int scale, int color ){
-   //std::cout<< __LINE__ << " " << x << ":" << y << "\n";
-   for( int dx = 0; dx < scale; dx++ ){
-      for( int dy = 0; dy < scale; dy++ ){
-         SetPixel( hdc, scale * x + dx, scale * y + dy, color );
-      }
-   }   
+static void put_pixel(SDL_Renderer *r, int x, int y, int scale){
+    SDL_Rect rect = {
+        x * scale,
+        y * scale,
+        scale, // Width.
+        scale  // Height.
+    };
+    if (scale >= 3) {
+        rect.w--; // Provide a bit of pixel spacing for large scales.
+        rect.h--;
+    }
+    SDL_RenderFillRect(r, &rect);
 }
 
 void window::clear(){
-   return;
-   for( int x = 0; x < 128; ++x )   {
-      for( int y = 0; y < 64; ++y ){
-         print_pixel( hdc, x, y, scale, RGB( 0xFF, 0xFF, 0xFF ) );
-      }
-   }
+    for (auto &row : pixels)
+        row.assign(x_size, false);
 }
 
-void window::draw( int x, int y ){
-   print_pixel( hdc, x, y, scale, RGB( 0x00, 0x00, 0x00 ) );
+void window::draw(int x, int y){
+    pixels[y][x] = true;
+    // put_pixel(sdl_renderer, x, y, scale);
 }
 
+void window::redraw() {
+    // Clear the buffer.
+    SDL_SetRenderDrawColor(sdl_renderer, COLOR_BG[0], COLOR_BG[1], COLOR_BG[2], 255);
+    SDL_RenderClear(sdl_renderer);
+    SDL_SetRenderDrawColor(sdl_renderer, COLOR_FG[0], COLOR_FG[1], COLOR_FG[2], 255);
+
+    // Draw the pixel grid.
+    int y = 0;
+    for (auto row : pixels) {
+        int x = 0;
+        for (bool cell : row) {
+            if (cell)
+                put_pixel(sdl_renderer, x, y, scale);
+            x++;
+        }
+        y++;
+    }
+
+    // Flip.
+    SDL_RenderPresent(sdl_renderer);
+}
+
+void window::mainloop() {
+    while (true) {
+        SDL_Event e;
+        while (SDL_PollEvent (&e)) {
+            if (
+                    e.type == SDL_QUIT
+                || (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_q)
+            ) {
+                SDL_Quit();
+                return;
+            }
+        }
+
+        redraw();
+
+        // Aim for slightly less than 60 frames per second.
+        SDL_Delay(1000 / 60);
+    }
+}

@@ -4,20 +4,25 @@
 #ifndef WINDOW_HPP
 #define WINDOW_HPP
 
-#include "windows.h"
+#include <SDL2/SDL.h>
+#include <vector>
 
 class window {
-   int x_size;
-   int y_size;
-   int scale;
+    int x_size;
+    int y_size;
+    int scale;
    
-   // needed to use the OS window
-   HDC hdc;
+    SDL_Window   *sdl_win;
+    SDL_Renderer *sdl_renderer;
+
+    std::vector< std::vector<bool> > pixels;
    
 public:
-   window( int x_size, int y_size, int scale );
-   void draw( int x, int y );
-   void clear();
+    window(int x_size, int y_size, int scale);
+    void draw(int x, int y);
+    void clear();
+    void redraw();
+    void mainloop();
 };
 
 #endif // WINDOW_HPP
