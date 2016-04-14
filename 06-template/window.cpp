@@ -61,7 +61,12 @@ void window::clear(){
 }
 
 void window::draw(int x, int y){
-    if ((size_t)y < pixels.size() && (size_t)x < pixels[y].size())
+    if (
+           y >= 0
+        && x >= 0
+        && (size_t)y < pixels.size()
+        && (size_t)x < pixels[y].size()
+    )
         pixels[y][x] = true;
 }
 
