@@ -61,8 +61,8 @@ void window::clear(){
 }
 
 void window::draw(int x, int y){
-    pixels[y][x] = true;
-    // put_pixel(sdl_renderer, x, y, scale);
+    if (y < pixels.size() && x < pixels[y].size())
+        pixels[y][x] = true;
 }
 
 void window::redraw() {
